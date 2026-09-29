@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CDP API Status Code 重構的思考邏輯</title>
+<style>
+:root {
+  --bg: #f6f8fb;
+  --paper: #ffffff;
+  --text: #1f2937;
+  --muted: #667085;
+  --line: #e5e7eb;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --quote: #f8fafc;
+  --code-bg: #0f172a;
+  --code-text: #e2e8f0;
+  --shadow: 0 16px 40px rgba(15, 23, 42, .08);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC",
+               "PingFang TC", "Microsoft JhengHei", sans-serif;
+  line-height: 1.8;
+}
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(15, 23, 42, .94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.site-nav .inner {
+  max-width: 980px;
+  margin: auto;
+  padding: 10px 20px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.site-nav a {
+  color: #cbd5e1;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.site-nav a:hover { background: rgba(255,255,255,.08); color: white; }
+.site-nav a.active { background: #2563eb; color: white; }
+.site-nav .brand { margin-right: auto; color: white; font-weight: 800; padding-left: 0; }
+.wrapper {
+  max-width: 980px;
+  margin: 36px auto 48px;
+  padding: 0 20px;
+}
+.hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  color: white;
+  border-radius: 22px;
+  padding: 42px 46px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+.hero .eyebrow {
+  display: inline-block;
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .8;
+  margin-bottom: 12px;
+}
+.hero h1 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.2;
+}
+.hero p {
+  margin: 16px 0 0;
+  color: rgba(255,255,255,.85);
+  max-width: 760px;
+}
+.doc {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 44px 48px;
+  box-shadow: var(--shadow);
+}
+.doc > h1:first-child { display:none; }
+h2 {
+  margin-top: 48px;
+  padding-top: 8px;
+  font-size: 26px;
+  line-height: 1.35;
+  border-top: 1px solid var(--line);
+}
+h2:first-of-type {
+  border-top: none;
+  margin-top: 0;
+}
+h3 {
+  margin-top: 32px;
+  font-size: 20px;
+  color: #111827;
+}
+p { margin: 12px 0; }
+strong { color: #111827; }
+blockquote {
+  margin: 18px 0;
+  padding: 16px 20px;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 10px;
+  font-weight: 650;
+}
+ul {
+  margin: 12px 0 18px 1.2rem;
+  padding: 0;
+}
+li { margin: 5px 0; }
+pre {
+  overflow-x: auto;
+  background: var(--code-bg);
+  color: var(--code-text);
+  border-radius: 14px;
+  padding: 20px 22px;
+  line-height: 1.6;
+  margin: 18px 0 24px;
+  font-size: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+}
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+p code, li code, blockquote code {
+  background: #eef2f7;
+  color: #0f172a;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: .92em;
+}
+.next {
+  margin-top: 42px;
+  padding: 22px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  border-radius: 16px;
+}
+.next a {
+  color: #1d4ed8;
+  font-weight: 800;
+  text-decoration: none;
+}
+.footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 22px 0 8px;
+}
+@media (max-width: 720px) {
+  .site-nav .inner { padding: 8px 12px; overflow-x: auto; }
+  .site-nav .brand { display: none; }
+  .site-nav a { white-space: nowrap; }
+  .wrapper { margin: 20px auto; padding: 0 12px; }
+  .hero { padding: 28px 24px; border-radius: 16px; }
+  .doc { padding: 28px 22px; border-radius: 16px; }
+  h2 { font-size: 23px; }
+}
+@media print {
+  .site-nav { display: none; }
+  body { background: white; }
+  .wrapper { max-width: none; margin: 0; padding: 0; }
+  .hero, .doc { box-shadow: none; border-radius: 0; }
+  .hero { page-break-after: avoid; }
+  pre { white-space: pre-wrap; }
+}
+</style>
+</head>
+<body>
+<nav class="site-nav">
+  <div class="inner">
+    <a class="brand" href="design-rationale.html">CDP API Error Design</a>
+    <a class="active" href="design-rationale.html">01 設計緣起</a>
+    <a href="index.html">02 業界案例</a>
+  </div>
+</nav>
+
+<div class="wrapper">
+  <section class="hero">
+    <div class="eyebrow">CDP API Design / Error Handling</div>
+    <h1>CDP API Status Code 重構的思考邏輯</h1>
+    <p>從現況問題、核心根因、設計原則到成功判準，整理出一套以「降低判斷與處理時間」為核心的 API Error Design 邏輯。</p>
+  </section>
+
+  <main class="doc">
+    <h1>CDP API Status Code 重構的思考邏輯</h1>
+
+    <h2>一、問題的起點</h2>
+    <p>這次會想重新設計 API 的 Status / Error Code，起點其實很單純：</p>
+    <p>我們自己在串接與測試 API 的過程中，發現現有的 Status Code 存在一些不一致、不直覺，甚至不符合實際錯誤情境的情況。</p>
+    <p>表面上看起來，問題是：</p>
+    <blockquote>Code 設計得不夠好。</blockquote>
+    <p>但往下追一層，真正造成困擾的其實不是 Code 長得不好看，而是：</p>
+    <blockquote>當我們看到這些 Code 時，沒有辦法立刻知道發生了什麼事情。</blockquote>
+
+    <h2>二、真正的核心問題：判斷成本太高</h2>
+    <p>每次發生錯誤時，我們現在往往需要額外經過一段判斷流程：</p>
+    <pre><code>看到 Code
+→ 思考它代表什麼
+→ 查文件或程式
+→ 確認實際錯誤原因
+→ 判斷問題出在 Client 還是 Server
+→ 再決定接下來要怎麼處理</code></pre>
+    <p>這段額外的判斷流程，就是目前真正產生時間成本的地方。</p>
+    <p>而且這個問題不只發生在我們內部。</p>
+    <p>對 Client 端來說也是一樣。</p>
+    <p>如果錯誤資訊不夠清楚，Client 無法直接判斷問題，就必須再回頭詢問我們；我們收到問題後，又需要重新確認當時的 Request、Log、輸入資料與錯誤情境。</p>
+    <p>最後就會形成：</p>
+    <pre><code>Client 無法判斷
+→ 回報我們
+→ 我們重新確認問題
+→ 雙方來回溝通
+→ 才找到真正原因</code></pre>
+    <p>因此真正要解決的問題，其實不是單純「重新編一套 Status Code」。</p>
+    <p>我們真正想改善的是：</p>
+    <blockquote><strong>降低問題發生之後，雙方理解、判斷、定位與處理問題所需要的時間。</strong></blockquote>
+
+    <h2>三、這次重構的核心目標</h2>
+    <p>新的 API Error Design，核心不是追求：</p>
+    <ul>
+      <li>Code 更短</li>
+      <li>Code 更整齊</li>
+      <li>編號更一致</li>
+      <li>看起來更像一套規範</li>
+    </ul>
+    <p>真正的核心目標是：</p>
+    <blockquote><strong>讓使用者在看到錯誤 Response 的當下，就能更快知道發生了什麼事情，以及下一步要怎麼處理。</strong></blockquote>
+    <p>換句話說：</p>
+    <blockquote><strong>Error Code 的目標不是節省字元，而是節省人的判斷時間。</strong></blockquote>
+
+    <h2>四、設計原則</h2>
+
+    <h3>1. 錯誤資訊要簡單、直白</h3>
+    <p>例如，與其使用：</p>
+    <pre><code>M002</code></pre>
+    <p>不如直接使用：</p>
+    <pre><code>MEMBER_NOT_FOUND</code></pre>
+    <p>因為 <code>M002</code> 雖然比較短，但使用者還需要再經過一次查詢與翻譯：</p>
+    <pre><code>看到 M002
+→ 查文件
+→ 找到 M002
+→ 讀取定義
+→ 才知道會員不存在</code></pre>
+    <p>而 <code>MEMBER_NOT_FOUND</code> 幾乎可以直接理解。</p>
+    <p>因此我們所追求的「簡單」不是字數越少越好，而是：</p>
+    <blockquote><strong>理解成本越低越好。</strong></blockquote>
+
+    <h3>2. HTTP Status 與 Application Error Code 各自負責不同層級</h3>
+    <p>HTTP Status Code 應該遵循標準語意，例如：</p>
+    <pre><code>400 Bad Request
+401 Unauthorized
+403 Forbidden
+404 Not Found
+409 Conflict
+422 Unprocessable Content
+429 Too Many Requests
+500 Internal Server Error
+503 Service Unavailable</code></pre>
+    <p>而 Application Error Code 則負責表達具體的業務或系統錯誤，例如：</p>
+    <pre><code>MEMBER_NOT_FOUND
+INVALID_ACCESS_TOKEN
+SCHEMA_VALIDATION_FAILED
+IDENTITY_CONFLICT
+RATE_LIMIT_EXCEEDED
+DESTINATION_UNAVAILABLE
+INTERNAL_ERROR</code></pre>
+    <p>可以理解為：</p>
+    <pre><code>HTTP Status
+→ 告訴使用者大方向發生了什麼
+
+Application Error Code
+→ 告訴使用者具體是哪一類問題</code></pre>
+
+    <h3>3. Code 告訴問題類型，Message 補充細節</h3>
+    <p>例如：</p>
+    <pre><code>{
+  "code": "SCHEMA_VALIDATION_FAILED",
+  "message": "The submitted event contains invalid data."
+}</code></pre>
+    <p><code>code</code> 應該是穩定、可讓程式判斷的值。</p>
+    <p><code>message</code> 則是給人閱讀，用來補充錯誤內容。</p>
+    <p>如果還有更細的欄位錯誤，可以另外放進 <code>errors</code> 或 <code>details</code>：</p>
+    <pre><code>{
+  "code": "SCHEMA_VALIDATION_FAILED",
+  "message": "The submitted event contains invalid data.",
+  "errors": [
+    {
+      "field": "email",
+      "code": "INVALID_EMAIL_FORMAT",
+      "message": "Email format is invalid."
+    }
+  ]
+}</code></pre>
+    <p>這樣就不需要把所有資訊全部塞進一段 message。</p>
+
+    <h3>4. 每次 Request 都應該可以被追蹤</h3>
+    <p>錯誤發生時，其中一個最浪費時間的地方，就是無法快速找到對應的 Log。</p>
+    <p>因此每一次 API Request 最好都提供唯一的：</p>
+    <pre><code>request_id</code></pre>
+    <p>或：</p>
+    <pre><code>trace_id</code></pre>
+    <p>例如：</p>
+    <pre><code>{
+  "success": false,
+  "code": "SCHEMA_VALIDATION_FAILED",
+  "message": "The submitted event contains invalid data.",
+  "request_id": "req_01KABC123"
+}</code></pre>
+    <p>當 Client 回報問題時，不需要描述：</p>
+    <blockquote>昨天晚上某個會員送了一筆資料，好像有失敗。</blockquote>
+    <p>只需要提供：</p>
+    <pre><code>request_id = req_01KABC123</code></pre>
+    <p>我們就可以直接從 Log 反查：</p>
+    <pre><code>Request
+→ Input
+→ Validation
+→ Processing
+→ Error</code></pre>
+    <p>這可以大幅降低雙方重新確認資訊的時間。</p>
+
+    <h3>5. Error Response 最好能幫助使用者判斷下一步</h3>
+    <p>好的 Error Code 不只是描述發生了什麼，也應該幫助使用者判斷接下來要怎麼做。</p>
+    <p>例如：</p>
+    <pre><code>INVALID_ACCESS_TOKEN
+→ 重新取得或更新 Token</code></pre>
+    <pre><code>SCHEMA_VALIDATION_FAILED
+→ 修改輸入資料</code></pre>
+    <pre><code>RATE_LIMIT_EXCEEDED
+→ 不需要修改資料，稍後 Retry</code></pre>
+    <pre><code>DESTINATION_UNAVAILABLE
+→ 下游服務暫時不可用，可以考慮 Retry</code></pre>
+    <pre><code>INTERNAL_ERROR
+→ 問題可能需要由 Server Side 進一步處理</code></pre>
+    <p>因此 Error Code 本質上不只是錯誤名稱，也可以視為一個：</p>
+    <blockquote><strong>Decision Signal</strong></blockquote>
+    <p>它是在告訴使用者、程式、SDK、Queue Worker 或 Monitoring System：</p>
+    <blockquote>接下來該怎麼做。</blockquote>
+
+    <h2>五、建議的 Response 結構</h2>
+    <p>例如：</p>
+    <pre><code>422 Unprocessable Content</code></pre>
+    <pre><code>{
+  "success": false,
+  "code": "SCHEMA_VALIDATION_FAILED",
+  "message": "The submitted event contains invalid data.",
+  "errors": [
+    {
+      "field": "email",
+      "code": "INVALID_EMAIL_FORMAT",
+      "message": "Email format is invalid."
+    }
+  ],
+  "request_id": "req_01KABC123"
+}</code></pre>
+    <p>這筆 Response 可以讓使用者快速完成判斷：</p>
+    <pre><code>422
+↓
+Schema 驗證失敗
+↓
+email 有問題
+↓
+email 格式錯誤
+↓
+應修改資料，而不是直接重送
+↓
+如果仍有問題，可以提供 request_id 讓 Server Side 查 Log</code></pre>
+
+    <h2>六、這套設計真正降低的是什麼成本</h2>
+    <p>好的 Error Design 不只改善工程師的開發體驗。</p>
+    <p>它同時降低：</p>
+    <pre><code>Client 工程師除錯時間
++
+Server 工程師查 Log 時間
++
+雙方溝通時間
++
+客服 / PM 轉述問題的成本
++
+來回確認次數
++
+問題平均處理時間</code></pre>
+    <p>因此這次 Status Code 重構，本質上是在改善整個問題處理流程的效率。</p>
+
+    <h2>七、因果邏輯總結</h2>
+    <p>整體的因果鏈可以整理成：</p>
+    <pre><code>現有 Status / Error Code 不一致、不直覺
+↓
+看到錯誤後無法立即理解
+↓
+需要額外查詢、思考、判斷
+↓
+增加 Client 與 Server 雙方的時間成本
+↓
+問題回報時還需要重新確認大量資訊
+↓
+問題處理速度變慢
+↓
+因此需要重新設計 Error Handling
+↓
+使用直白、穩定、具語意的 Error Code
+↓
+搭配清楚的 Message / Errors
+↓
+加入唯一的 request_id / trace_id
+↓
+讓使用者快速理解、定位並決定下一步
+↓
+降低整體判斷、溝通與除錯成本</code></pre>
+
+    <h2>八、最終設計理念</h2>
+    <p>這次重構的核心設計理念可以總結為：</p>
+    <blockquote><strong>以降低問題判斷與處理時間為首要目標。錯誤資訊應簡單、直白、具可操作性，讓使用者能快速理解發生了什麼事情；同時透過唯一的 Request ID 建立可追蹤性，降低 Client 與 Server 雙方的除錯、溝通與問題定位成本。</strong></blockquote>
+    <p>換句話說：</p>
+    <blockquote><strong>我們不是為了讓 Status Code 更漂亮而重構，而是因為現在的 Status Code 增加了人的判斷成本，所以才需要重新設計。</strong></blockquote>
+    <p>而新的設計是否成功，也不應該只用：</p>
+    <blockquote>Code 有沒有統一格式</blockquote>
+    <p>來衡量。</p>
+    <p>真正應該看的指標是：</p>
+    <blockquote><strong>發生問題之後，我們能不能比以前更快知道問題在哪裡，並且更快解決它。</strong></blockquote>
+
+    <div class="next">
+      <strong>下一步：用業界現行案例驗證這套設計思路</strong><br>
+      <a href="index.html">前往 02 · Adobe / Salesforce / Oracle / SAP / Tealium 業界案例 →</a>
+    </div>
+  </main>
+
+  <div class="footer">CDP API Status Code Refactoring Notes</div>
+</div>
+</body>
+</html>
